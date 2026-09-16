@@ -97,6 +97,7 @@ func (p *DokployProvider) Resources(_ context.Context) []func() resource.Resourc
 		NewServerResource,
 		NewRedisResource,
 		NewPostgresResource,
+		NewLibsqlResource,
 		NewMySQLResource,
 		NewMariaDBResource,
 		NewMongoDBResource,

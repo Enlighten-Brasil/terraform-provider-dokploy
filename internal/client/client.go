@@ -1060,6 +1060,157 @@ func (c *DokployClient) DeployRedis(id string) error {
 	return err
 }
 
+// DeployMySQL triggers a deployment for a MySQL instance (mysql.deploy).
+func (c *DokployClient) DeployMySQL(id string) error {
+	payload := map[string]interface{}{
+		"mysqlId": id,
+	}
+	_, err := c.doRequest("POST", "mysql.deploy", payload)
+	return err
+}
+
+// DeployMariaDB triggers a deployment for a MariaDB instance (mariadb.deploy).
+func (c *DokployClient) DeployMariaDB(id string) error {
+	payload := map[string]interface{}{
+		"mariadbId": id,
+	}
+	_, err := c.doRequest("POST", "mariadb.deploy", payload)
+	return err
+}
+
+// DeployMongo triggers a deployment for a MongoDB instance (mongo.deploy).
+func (c *DokployClient) DeployMongo(id string) error {
+	payload := map[string]interface{}{
+		"mongoId": id,
+	}
+	_, err := c.doRequest("POST", "mongo.deploy", payload)
+	return err
+}
+
+// --- LibSQL (sqld) ---
+
+// Libsql represents a LibSQL database instance (Dokploy >= 0.29.0).
+type Libsql struct {
+	LibsqlID          string `json:"libsqlId"`
+	Name              string `json:"name"`
+	AppName           string `json:"appName"`
+	Description       string `json:"description"`
+	DatabaseUser      string `json:"databaseUser"`
+	DatabasePassword  string `json:"databasePassword"`
+	SqldNode          string `json:"sqldNode"`
+	SqldPrimaryUrl    string `json:"sqldPrimaryUrl"`
+	DockerImage       string `json:"dockerImage"`
+	EnvironmentID     string `json:"environmentId"`
+	ApplicationStatus string `json:"applicationStatus"`
+	Replicas          int    `json:"replicas"`
+	ServerID          string `json:"serverId"`
+}
+
+// CreateLibsql creates a new LibSQL instance.
+// libsql.create requires: name, appName, environmentId, description,
+// databaseUser, databasePassword, sqldNode, sqldPrimaryUrl, serverId
+// (description/serverId must be present even when empty).
+func (c *DokployClient) CreateLibsql(libsql Libsql) (*Libsql, error) {
+	payload := map[string]interface{}{
+		"name":             libsql.Name,
+		"appName":          libsql.AppName,
+		"environmentId":    libsql.EnvironmentID,
+		"description":      libsql.Description,
+		"databaseUser":     libsql.DatabaseUser,
+		"databasePassword": libsql.DatabasePassword,
+		"sqldNode":         libsql.SqldNode,
+		"sqldPrimaryUrl":   libsql.SqldPrimaryUrl,
+		"serverId":         libsql.ServerID,
+	}
+	if libsql.DockerImage != "" {
+		payload["dockerImage"] = libsql.DockerImage
+	}
+
+	resp, err := c.doRequest("POST", "libsql.create", payload)
+	if err != nil {
+		return nil, err
+	}
+
+	var result Libsql
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal libsql response: %w", err)
+	}
+	return &result, nil
+}
+
+// GetLibsql retrieves a LibSQL instance by ID.
+func (c *DokployClient) GetLibsql(id string) (*Libsql, error) {
+	endpoint := fmt.Sprintf("libsql.one?libsqlId=%s", id)
+	resp, err := c.doRequest("GET", endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var result Libsql
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// UpdateLibsql updates an existing LibSQL instance.
+func (c *DokployClient) UpdateLibsql(libsql Libsql) (*Libsql, error) {
+	payload := map[string]interface{}{
+		"libsqlId": libsql.LibsqlID,
+	}
+	if libsql.Name != "" {
+		payload["name"] = libsql.Name
+	}
+	if libsql.Description != "" {
+		payload["description"] = libsql.Description
+	}
+	if libsql.DatabaseUser != "" {
+		payload["databaseUser"] = libsql.DatabaseUser
+	}
+	if libsql.DatabasePassword != "" {
+		payload["databasePassword"] = libsql.DatabasePassword
+	}
+	if libsql.SqldNode != "" {
+		payload["sqldNode"] = libsql.SqldNode
+	}
+	if libsql.SqldPrimaryUrl != "" {
+		payload["sqldPrimaryUrl"] = libsql.SqldPrimaryUrl
+	}
+	if libsql.DockerImage != "" {
+		payload["dockerImage"] = libsql.DockerImage
+	}
+
+	resp, err := c.doRequest("POST", "libsql.update", payload)
+	if err != nil {
+		return nil, err
+	}
+
+	var result Libsql
+	if err := json.Unmarshal(resp, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeleteLibsql removes a LibSQL instance (libsql.remove).
+func (c *DokployClient) DeleteLibsql(id string) error {
+	payload := map[string]string{
+		"libsqlId": id,
+	}
+	_, err := c.doRequest("POST", "libsql.remove", payload)
+	return err
+}
+
+// DeployLibsql triggers a deployment for a LibSQL instance (libsql.deploy).
+func (c *DokployClient) DeployLibsql(id string) error {
+	payload := map[string]interface{}{
+		"libsqlId": id,
+	}
+	_, err := c.doRequest("POST", "libsql.deploy", payload)
+	return err
+}
+
+
 func (c *DokployClient) RedeployApplication(id string) error {
 	payload := map[string]interface{}{
 		"applicationId": id,
@@ -2459,16 +2610,17 @@ func (c *DokployClient) DeleteDatabaseWithType(id, dbType string) error {
 // --- Domain ---
 
 type Domain struct {
-	ID              string `json:"domainId"`
-	ApplicationID   string `json:"applicationId"`
-	ComposeID       string `json:"composeId"`
-	ServiceName     string `json:"serviceName"`
-	Host            string `json:"host"`
-	Path            string `json:"path"`
-	Port            int64  `json:"port"`
-	HTTPS           bool   `json:"https"`
-	CertificateType string `json:"certificateType"`
-	Enabled         bool   `json:"enabled"`
+	ID              string   `json:"domainId"`
+	ApplicationID   string   `json:"applicationId"`
+	ComposeID       string   `json:"composeId"`
+	ServiceName     string   `json:"serviceName"`
+	Host            string   `json:"host"`
+	Path            string   `json:"path"`
+	Port            int64    `json:"port"`
+	HTTPS           bool     `json:"https"`
+	CertificateType string   `json:"certificateType"`
+	Enabled         bool     `json:"enabled"`
+	Middlewares     []string `json:"middlewares"`
 }
 
 func (c *DokployClient) CreateDomain(domain Domain) (*Domain, error) {
@@ -2478,6 +2630,9 @@ func (c *DokployClient) CreateDomain(domain Domain) (*Domain, error) {
 		"port":    domain.Port,
 		"https":   domain.HTTPS,
 		"enabled": domain.Enabled,
+	}
+	if domain.Middlewares != nil {
+		payload["middlewares"] = domain.Middlewares
 	}
 	// Set certificate type based on HTTPS setting
 	if domain.HTTPS {
@@ -2573,6 +2728,9 @@ func (c *DokployClient) UpdateDomain(domain Domain) (*Domain, error) {
 		"https":       domain.HTTPS,
 		"serviceName": domain.ServiceName,
 		"enabled":     domain.Enabled,
+	}
+	if domain.Middlewares != nil {
+		payload["middlewares"] = domain.Middlewares
 	}
 	// Set certificate type based on HTTPS setting
 	if domain.HTTPS {

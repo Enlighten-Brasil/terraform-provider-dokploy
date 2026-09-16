@@ -21,16 +21,26 @@ alinhadas às versões do servidor que adotarmos.
 - `dokploy_redis.deploy_on_create` / `dokploy_postgres.deploy_on_create`
   (`redis.deploy`/`postgres.deploy`).
 
+## Features implementadas (v0.8.0-enspace.3)
+
+- `dokploy_domain.middlewares` — middlewares Traefik por domínio (v0.29.0).
+- `deploy_on_create` p/ mysql/mariadb/mongo (`mysql.deploy` etc.) + fix do
+  prefix de `app_name` no Create desses três recursos (mesmo bug do postgres).
+- `dokploy_libsql` — recurso novo (v0.29.0).
+  **Bloqueado por bug do servidor (v0.30.6):** `libsql.create` omite o bind
+  de `serverId` quando vazio → INSERT com 13 placeholders e 12 params → 500.
+  Sem server remoto não há valor válido (`""` buga, null falha no zod).
+  Recurso compila e passa no zod; validar de novo após fix do servidor ou
+  com remote server configurado.
+
 ## Backlog priorizado (do changelog do Dokploy)
 
 | Prio | Item | Origem | Esforço |
 |---|---|---|---|
-| P2 | `middlewares` em `dokploy_domain` | v0.29.0 | baixo |
-| P2 | `dokploy_libsql` (novo db type) | v0.29.0 | médio |
-| P2 | `deploy_on_create` p/ mysql/mariadb/mongo | simétrico | baixo |
 | P3 | Vault providers (`${{vault:...}}` em env) | v0.30.0 | avaliar |
 | P3 | Networks attach por serviço | v0.30.0 | alto |
 | P3 | DNS providers (Cloudflare/Route53) | v0.30.0 | alto |
+| P3 | libsql: revalidar após fix server-side | v0.30.6 bug | baixo |
 
 ## Processo
 

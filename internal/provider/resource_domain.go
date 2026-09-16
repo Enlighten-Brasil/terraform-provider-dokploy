@@ -6,10 +6,13 @@ import (
 	"strings"
 
 	"github.com/ahmedali6/terraform-provider-dokploy/internal/client"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -37,6 +40,7 @@ type DomainResourceModel struct {
 	HTTPS             types.Bool   `tfsdk:"https"`
 	CertificateType   types.String `tfsdk:"certificate_type"`
 	Enabled           types.Bool   `tfsdk:"enabled"`
+	Middlewares       types.List   `tfsdk:"middlewares"`
 	GenerateTraefikMe types.Bool   `tfsdk:"generate_traefik_me"`
 	RedeployOnUpdate  types.Bool   `tfsdk:"redeploy_on_update"`
 }
@@ -101,6 +105,13 @@ func (r *DomainResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 				Computed:    true,
 				Default:     booldefault.StaticBool(true),
 				Description: "Whether the domain is active in Traefik. Disabled domains keep their config but stop routing (Dokploy >= 0.30.0).",
+			},
+			"middlewares": schema.ListAttribute{
+				Optional:    true,
+				Computed:    true,
+				ElementType: types.StringType,
+				Default:     listdefault.StaticValue(types.ListValueMust(types.StringType, []attr.Value{})),
+				Description: "Traefik middleware names attached to this domain (Dokploy >= 0.29.0).",
 			},
 			"generate_traefik_me": schema.BoolAttribute{
 				Optional:    true,
@@ -193,6 +204,9 @@ func (r *DomainResource) Create(ctx context.Context, req resource.CreateRequest,
 		CertificateType: plan.CertificateType.ValueString(),
 		Enabled:         plan.Enabled.ValueBool(),
 	}
+	if !plan.Middlewares.IsNull() && !plan.Middlewares.IsUnknown() {
+		resp.Diagnostics.Append(plan.Middlewares.ElementsAs(ctx, &domain.Middlewares, false)...)
+	}
 
 	createdDomain, err := r.client.CreateDomain(domain)
 	if err != nil {
@@ -206,6 +220,7 @@ func (r *DomainResource) Create(ctx context.Context, req resource.CreateRequest,
 		domain.ID = createdDomain.ID
 		if updated, uErr := r.client.UpdateDomain(domain); uErr == nil {
 			createdDomain.Enabled = updated.Enabled
+			createdDomain.Middlewares = updated.Middlewares
 		} else {
 			resp.Diagnostics.AddWarning("Could not set enabled on create", uErr.Error())
 		}
@@ -215,6 +230,7 @@ func (r *DomainResource) Create(ctx context.Context, req resource.CreateRequest,
 	plan.ServiceName = types.StringValue(createdDomain.ServiceName)
 	plan.CertificateType = types.StringValue(createdDomain.CertificateType)
 	plan.Enabled = types.BoolValue(createdDomain.Enabled)
+	plan.Middlewares = middlewaresToList(ctx, createdDomain.Middlewares, &resp.Diagnostics)
 
 	// Trigger Redeploy if requested
 	if !plan.RedeployOnUpdate.IsNull() && plan.RedeployOnUpdate.ValueBool() {
@@ -264,6 +280,7 @@ func (r *DomainResource) Read(ctx context.Context, req resource.ReadRequest, res
 			state.ServiceName = types.StringValue(d.ServiceName)
 			state.CertificateType = types.StringValue(d.CertificateType)
 			state.Enabled = types.BoolValue(d.Enabled)
+			state.Middlewares = middlewaresToList(ctx, d.Middlewares, &resp.Diagnostics)
 			if d.ApplicationID != "" {
 				state.ApplicationID = types.StringValue(d.ApplicationID)
 			}
@@ -304,6 +321,9 @@ func (r *DomainResource) Update(ctx context.Context, req resource.UpdateRequest,
 		CertificateType: plan.CertificateType.ValueString(),
 		Enabled:         plan.Enabled.ValueBool(),
 	}
+	if !plan.Middlewares.IsNull() && !plan.Middlewares.IsUnknown() {
+		resp.Diagnostics.Append(plan.Middlewares.ElementsAs(ctx, &domain.Middlewares, false)...)
+	}
 
 	updatedDomain, err := r.client.UpdateDomain(domain)
 	if err != nil {
@@ -318,6 +338,7 @@ func (r *DomainResource) Update(ctx context.Context, req resource.UpdateRequest,
 	plan.ServiceName = types.StringValue(updatedDomain.ServiceName)
 	plan.CertificateType = types.StringValue(updatedDomain.CertificateType)
 	plan.Enabled = types.BoolValue(updatedDomain.Enabled)
+	plan.Middlewares = middlewaresToList(ctx, updatedDomain.Middlewares, &resp.Diagnostics)
 
 	// Trigger Redeploy if requested
 	if !plan.RedeployOnUpdate.IsNull() && plan.RedeployOnUpdate.ValueBool() {
@@ -350,6 +371,16 @@ func (r *DomainResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		resp.Diagnostics.AddError("Error deleting domain", err.Error())
 		return
 	}
+}
+
+// middlewaresToList converte []string da API para types.List (nil vira lista vazia).
+func middlewaresToList(ctx context.Context, mws []string, diags *diag.Diagnostics) types.List {
+	if mws == nil {
+		mws = []string{}
+	}
+	l, d := types.ListValueFrom(ctx, types.StringType, mws)
+	diags.Append(d...)
+	return l
 }
 
 func (r *DomainResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

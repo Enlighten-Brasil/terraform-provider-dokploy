@@ -47,6 +47,7 @@ type MongoDBResourceModel struct {
 	ApplicationStatus types.String `tfsdk:"application_status"`
 	Replicas          types.Int64  `tfsdk:"replicas"`
 	ServerID          types.String `tfsdk:"server_id"`
+	DeployOnCreate    types.Bool   `tfsdk:"deploy_on_create"`
 }
 
 func (r *MongoDBResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -162,6 +163,10 @@ func (r *MongoDBResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
+			"deploy_on_create": schema.BoolAttribute{
+				Optional:    true,
+				Description: "Trigger a deployment after creating the instance (mongo.deploy).",
+			},
 		},
 	}
 }
@@ -240,8 +245,19 @@ func (r *MongoDBResource) Create(ctx context.Context, req resource.CreateRequest
 		}
 	}
 
-	// Set state from created resource
+	// Set state from created resource, preserving the configured app_name
+	// prefix (Dokploy appends a random suffix server-side; Read/Update already
+	// preserve the prefix for the same reason).
+	prefix := plan.AppName
 	r.mapMongoDBToState(&plan, createdMongo)
+	plan.AppName = prefix
+
+	// Deploy if requested
+	if !plan.DeployOnCreate.IsNull() && plan.DeployOnCreate.ValueBool() {
+		if err := r.client.DeployMongo(plan.ID.ValueString()); err != nil {
+			resp.Diagnostics.AddWarning("Deployment Trigger Failed", fmt.Sprintf("Instance created but deployment failed to trigger: %s", err.Error()))
+		}
+	}
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
