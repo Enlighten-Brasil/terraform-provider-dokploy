@@ -1040,6 +1040,26 @@ func (c *DokployClient) DeployApplication(id string, serverId string) error {
 	return err
 }
 
+// DeployPostgres triggers a deployment for a PostgreSQL instance.
+// Corresponds to postgres.deploy endpoint (Dokploy >= 0.25).
+func (c *DokployClient) DeployPostgres(id string) error {
+	payload := map[string]interface{}{
+		"postgresId": id,
+	}
+	_, err := c.doRequest("POST", "postgres.deploy", payload)
+	return err
+}
+
+// DeployRedis triggers a deployment for a Redis instance.
+// Corresponds to redis.deploy endpoint (Dokploy >= 0.25).
+func (c *DokployClient) DeployRedis(id string) error {
+	payload := map[string]interface{}{
+		"redisId": id,
+	}
+	_, err := c.doRequest("POST", "redis.deploy", payload)
+	return err
+}
+
 func (c *DokployClient) RedeployApplication(id string) error {
 	payload := map[string]interface{}{
 		"applicationId": id,
@@ -2448,14 +2468,16 @@ type Domain struct {
 	Port            int64  `json:"port"`
 	HTTPS           bool   `json:"https"`
 	CertificateType string `json:"certificateType"`
+	Enabled         bool   `json:"enabled"`
 }
 
 func (c *DokployClient) CreateDomain(domain Domain) (*Domain, error) {
 	payload := map[string]interface{}{
-		"host":  domain.Host,
-		"path":  domain.Path,
-		"port":  domain.Port,
-		"https": domain.HTTPS,
+		"host":    domain.Host,
+		"path":    domain.Path,
+		"port":    domain.Port,
+		"https":   domain.HTTPS,
+		"enabled": domain.Enabled,
 	}
 	// Set certificate type based on HTTPS setting
 	if domain.HTTPS {
@@ -2550,6 +2572,7 @@ func (c *DokployClient) UpdateDomain(domain Domain) (*Domain, error) {
 		"port":        domain.Port,
 		"https":       domain.HTTPS,
 		"serviceName": domain.ServiceName,
+		"enabled":     domain.Enabled,
 	}
 	// Set certificate type based on HTTPS setting
 	if domain.HTTPS {

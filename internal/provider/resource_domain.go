@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -35,6 +36,7 @@ type DomainResourceModel struct {
 	Port              types.Int64  `tfsdk:"port"`
 	HTTPS             types.Bool   `tfsdk:"https"`
 	CertificateType   types.String `tfsdk:"certificate_type"`
+	Enabled           types.Bool   `tfsdk:"enabled"`
 	GenerateTraefikMe types.Bool   `tfsdk:"generate_traefik_me"`
 	RedeployOnUpdate  types.Bool   `tfsdk:"redeploy_on_update"`
 }
@@ -93,6 +95,12 @@ func (r *DomainResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 				Optional:    true,
 				Computed:    true,
 				Description: "Certificate type: 'none', 'letsencrypt'. Defaults to 'letsencrypt' when https is true.",
+			},
+			"enabled": schema.BoolAttribute{
+				Optional:    true,
+				Computed:    true,
+				Default:     booldefault.StaticBool(true),
+				Description: "Whether the domain is active in Traefik. Disabled domains keep their config but stop routing (Dokploy >= 0.30.0).",
 			},
 			"generate_traefik_me": schema.BoolAttribute{
 				Optional:    true,
@@ -183,6 +191,7 @@ func (r *DomainResource) Create(ctx context.Context, req resource.CreateRequest,
 		Port:            plan.Port.ValueInt64(),
 		HTTPS:           plan.HTTPS.ValueBool(),
 		CertificateType: plan.CertificateType.ValueString(),
+		Enabled:         plan.Enabled.ValueBool(),
 	}
 
 	createdDomain, err := r.client.CreateDomain(domain)
@@ -191,9 +200,21 @@ func (r *DomainResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
+	// domain.create ignores `enabled` (always creates enabled); normalize
+	// via domain.update when the desired state differs.
+	if createdDomain.Enabled != plan.Enabled.ValueBool() {
+		domain.ID = createdDomain.ID
+		if updated, uErr := r.client.UpdateDomain(domain); uErr == nil {
+			createdDomain.Enabled = updated.Enabled
+		} else {
+			resp.Diagnostics.AddWarning("Could not set enabled on create", uErr.Error())
+		}
+	}
+
 	plan.ID = types.StringValue(createdDomain.ID)
 	plan.ServiceName = types.StringValue(createdDomain.ServiceName)
 	plan.CertificateType = types.StringValue(createdDomain.CertificateType)
+	plan.Enabled = types.BoolValue(createdDomain.Enabled)
 
 	// Trigger Redeploy if requested
 	if !plan.RedeployOnUpdate.IsNull() && plan.RedeployOnUpdate.ValueBool() {
@@ -242,6 +263,7 @@ func (r *DomainResource) Read(ctx context.Context, req resource.ReadRequest, res
 			state.HTTPS = types.BoolValue(d.HTTPS)
 			state.ServiceName = types.StringValue(d.ServiceName)
 			state.CertificateType = types.StringValue(d.CertificateType)
+			state.Enabled = types.BoolValue(d.Enabled)
 			if d.ApplicationID != "" {
 				state.ApplicationID = types.StringValue(d.ApplicationID)
 			}
@@ -280,6 +302,7 @@ func (r *DomainResource) Update(ctx context.Context, req resource.UpdateRequest,
 		Port:            plan.Port.ValueInt64(),
 		HTTPS:           plan.HTTPS.ValueBool(),
 		CertificateType: plan.CertificateType.ValueString(),
+		Enabled:         plan.Enabled.ValueBool(),
 	}
 
 	updatedDomain, err := r.client.UpdateDomain(domain)
@@ -294,6 +317,7 @@ func (r *DomainResource) Update(ctx context.Context, req resource.UpdateRequest,
 	plan.HTTPS = types.BoolValue(updatedDomain.HTTPS)
 	plan.ServiceName = types.StringValue(updatedDomain.ServiceName)
 	plan.CertificateType = types.StringValue(updatedDomain.CertificateType)
+	plan.Enabled = types.BoolValue(updatedDomain.Enabled)
 
 	// Trigger Redeploy if requested
 	if !plan.RedeployOnUpdate.IsNull() && plan.RedeployOnUpdate.ValueBool() {

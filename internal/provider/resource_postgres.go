@@ -46,6 +46,7 @@ type PostgresResourceModel struct {
 	ApplicationStatus types.String `tfsdk:"application_status"`
 	Replicas          types.Int64  `tfsdk:"replicas"`
 	ServerID          types.String `tfsdk:"server_id"`
+	DeployOnCreate    types.Bool   `tfsdk:"deploy_on_create"`
 }
 
 func (r *PostgresResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -162,6 +163,10 @@ func (r *PostgresResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
+			"deploy_on_create": schema.BoolAttribute{
+				Optional:    true,
+				Description: "Trigger a deployment after creating the instance (postgres.deploy).",
+			},
 		},
 	}
 }
@@ -246,6 +251,13 @@ func (r *PostgresResource) Create(ctx context.Context, req resource.CreateReques
 	prefix := plan.AppName
 	r.mapPostgresToState(&plan, createdPostgres)
 	plan.AppName = prefix
+
+	// Deploy if requested
+	if !plan.DeployOnCreate.IsNull() && plan.DeployOnCreate.ValueBool() {
+		if err := r.client.DeployPostgres(plan.ID.ValueString()); err != nil {
+			resp.Diagnostics.AddWarning("Deployment Trigger Failed", fmt.Sprintf("Instance created but deployment failed to trigger: %s", err.Error()))
+		}
+	}
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
