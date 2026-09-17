@@ -33,6 +33,13 @@ alinhadas às versões do servidor que adotarmos.
   Recurso compila e passa no zod; validar de novo após fix do servidor ou
   com remote server configurado.
 
+## Features implementadas (v0.8.0-enspace.4)
+
+- `server_app_name` (computed) em `dokploy_postgres` e `dokploy_redis` —
+  expõe o appName completo do servidor (prefix+suffix) para DNS interno;
+  `app_name` do postgres segue sendo o prefix (sem drift). Applications já
+  expõem o nome completo em `app_name`.
+
 ## Backlog priorizado (do changelog do Dokploy)
 
 | Prio | Item | Origem | Esforço |
