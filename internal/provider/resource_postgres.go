@@ -47,6 +47,7 @@ type PostgresResourceModel struct {
 	Replicas          types.Int64  `tfsdk:"replicas"`
 	ServerID          types.String `tfsdk:"server_id"`
 	DeployOnCreate    types.Bool   `tfsdk:"deploy_on_create"`
+	ServerAppName     types.String `tfsdk:"server_app_name"`
 }
 
 func (r *PostgresResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -166,6 +167,10 @@ func (r *PostgresResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 			"deploy_on_create": schema.BoolAttribute{
 				Optional:    true,
 				Description: "Trigger a deployment after creating the instance (postgres.deploy).",
+			},
+			"server_app_name": schema.StringAttribute{
+				Computed:    true,
+				Description: "Full server-side app name (prefix + random suffix), useful for in-network DNS between services.",
 			},
 		},
 	}
@@ -365,6 +370,7 @@ func (r *PostgresResource) mapPostgresToState(state *PostgresResourceModel, post
 	state.ID = types.StringValue(postgres.PostgresID)
 	state.Name = types.StringValue(postgres.Name)
 	state.AppName = types.StringValue(postgres.AppName)
+	state.ServerAppName = types.StringValue(postgres.AppName)
 	state.EnvironmentID = types.StringValue(postgres.EnvironmentID)
 	state.ApplicationStatus = types.StringValue(postgres.ApplicationStatus)
 	state.DatabaseName = types.StringValue(postgres.DatabaseName)

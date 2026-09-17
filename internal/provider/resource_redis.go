@@ -46,6 +46,7 @@ type RedisResourceModel struct {
 	Replicas          types.Int64  `tfsdk:"replicas"`
 	ServerID          types.String `tfsdk:"server_id"`
 	DeployOnCreate    types.Bool   `tfsdk:"deploy_on_create"`
+	ServerAppName     types.String `tfsdk:"server_app_name"`
 }
 
 func (r *RedisResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -159,6 +160,10 @@ func (r *RedisResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 				Optional:    true,
 				Description: "Trigger a deployment after creating the instance (redis.deploy).",
 			},
+			"server_app_name": schema.StringAttribute{
+				Computed:    true,
+				Description: "Full server-side app name (prefix + random suffix), useful for in-network DNS between services.",
+			},
 		},
 	}
 }
@@ -243,6 +248,7 @@ func (r *RedisResource) Create(ctx context.Context, req resource.CreateRequest, 
 	plan.Name = types.StringValue(createdRedis.Name)
 	// Store the server-modified app_name so state matches the remote resource.
 	plan.AppName = types.StringValue(createdRedis.AppName)
+	plan.ServerAppName = types.StringValue(createdRedis.AppName)
 	plan.EnvironmentID = types.StringValue(createdRedis.EnvironmentID)
 	plan.ApplicationStatus = types.StringValue(createdRedis.ApplicationStatus)
 
@@ -318,6 +324,7 @@ func (r *RedisResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	// Note: AppNamePrefix is not updated from server - it's user-provided config.
 	state.Name = types.StringValue(redis.Name)
 	state.AppName = types.StringValue(redis.AppName)
+	state.ServerAppName = types.StringValue(redis.AppName)
 	state.EnvironmentID = types.StringValue(redis.EnvironmentID)
 	state.ApplicationStatus = types.StringValue(redis.ApplicationStatus)
 
